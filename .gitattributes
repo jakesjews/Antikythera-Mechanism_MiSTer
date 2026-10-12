@@ -1,0 +1,2 @@
+# Gear-view and hardware captures are generated; keep LF endings in text tables.
+*.svh text eol=lf
