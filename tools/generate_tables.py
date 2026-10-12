@@ -201,7 +201,9 @@ def build_text_rom() -> TextRom:
     rom.add('EXEL_RING', ring_string(GEOM['SUB_RING_CHARS'], exel))
     # Static labels.
     labels = {
-        'TITLE': 'ANTIKYTHERA MECHANISM', 'L_DATE': 'DATE', 'L_EGYPT': 'EGYPTIAN', 'L_LUNAR_RING': 'LUNAR', 'L_SUN': 'SUN',
+        'TITLE': 'ANTIKYTHERA MECHANISM', 'TITLE_A': 'ANTIKYTHERA', 'TITLE_B': 'MECHANISM',
+        'L_ECLIPSE_NOW': 'ECLIPSE', 'L_SOUND': 'SOUND', 'L_SCAN15': '15 KHZ', 'L_SCAN31': '31 KHZ',
+        'L_DATE': 'DATE', 'L_EGYPT': 'EGYPTIAN', 'L_LUNAR_RING': 'LUNAR', 'L_SUN': 'SUN',
         'L_MEAN': 'DATE PTR', 'L_MOON': 'MOON', 'L_PHASE': 'PHASE', 'L_NODE': 'NODE',
         'L_APOGEE': 'APOGEE', 'L_PLANETS': 'PLANETS (2021 COSMOS)', 'L_PARAPEGMA': 'PARAPEGMA',
         'L_CRANK': 'CRANK', 'L_TURNS': 'TURNS', 'L_RUN': 'RUNNING', 'L_PAUSED': 'PAUSED',
@@ -298,6 +300,7 @@ HW_SHAFTS = [(s.name, s.rate) for s in M.SHAFTS] + [
     ('f', M.APSIDES * M.ratio(('e4', 'f1'))),
     ('h', M.SAROS_TURNS * M.ratio(('g2', 'h1'))),
     ('crank', M.Fraction(M.GEARS['b1'], M.GEARS['a1'])),
+    ('teeth', M.Fraction(M.GEARS['b1'], 1)),     # a1 teeth passing per year: one click each
 ]
 # Display-only angles derived from the shafts (gear view).
 DERIVED = {'moon_true': 'moon longitude with the anomaly', 'n': '5 x metonic', 'g': '4 x saros',
@@ -333,7 +336,7 @@ def write_tables(rom: TextRom):
     L.append('function automatic [16:0] shaft_num(input integer i, input is224);')
     L.append('\tcase(i)')
     for i, (name, rate) in enumerate(HW_SHAFTS):
-        if name == 'crank':
+        if name in ('crank', 'teeth'):
             L.append(f"\t\t{i}: shaft_num = is224 ? 17'd224 : 17'd223;")
         else:
             assert abs(rate.numerator) < (1 << 17)
@@ -418,6 +421,16 @@ def write_tables(rom: TextRom):
     for i, (lon, letter, text) in enumerate(sorted(M.PARAPEGMA)):
         L.append(f"\t\t{i}: parapegma_pos = 12'd{round(lon / 360 * 4096) % 4096}; // {letter} {text}")
     L += ['\t\tdefault: parapegma_pos = 0;', '\tendcase', 'endfunction', '']
+    # Turned-metal texture: fine concentric rings, as a lathe leaves on bronze.
+    import random
+    rng = random.Random(1901)
+    L.append('function automatic [3:0] lathe_noise(input [8:0] r);')
+    L.append('\tcase(r)')
+    value = 8
+    for r in range(512):
+        value = max(0, min(15, value + rng.choice([-3, -2, -1, 0, 0, 1, 2, 3])))
+        L.append(f"\t\t{r}: lathe_noise = 4'd{value};")
+    L += ['\t\tdefault: lathe_noise = 8;', '\tendcase', 'endfunction', '']
     L.append('function automatic [15:0] angle_per_pixel(input [8:0] r); // 1 px at radius r, in 1/65536 turn')
     L.append('\tcase(r)')
     for r in range(512):

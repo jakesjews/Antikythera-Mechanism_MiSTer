@@ -28,7 +28,7 @@ module am_timebase (
 
 `include "am_tables.svh"
 
-localparam [24:0] MONTH_TICKS = 25'd1935274;      // 19/235 year
+localparam [24:0] MONTH_TICKS = 25'd1935334;      // the Mechanism's month: 19/235 of its year
 localparam [24:0] DAY_TICKS_C = 25'd65536;
 
 function automatic [21:0] rate_q16(input [2:0] s);

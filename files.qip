@@ -8,6 +8,7 @@ set_global_assignment -name SYSTEMVERILOG_FILE rtl/am_timebase.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/am_cosmos.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/am_calendar.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/am_controls.sv
+set_global_assignment -name SYSTEMVERILOG_FILE rtl/am_audio.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/am_video.sv
 set_global_assignment -name SYSTEMVERILOG_FILE rtl/antikythera.sv
 set_global_assignment -name SEARCH_PATH rtl

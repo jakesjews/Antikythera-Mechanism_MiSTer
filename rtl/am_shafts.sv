@@ -20,11 +20,12 @@ module am_shafts (
 	input  wire [4:0]  step_shift,
 	input  wire        compute,
 	output wire        busy,
-	output reg  [20*23-1:0] fracs,
+	output reg  [20*24-1:0] fracs,
 	output reg         fracs_valid,
 	output reg  [7:0]  met_cell,       // exact floor(235 * metonic fraction)
 	output reg  [7:0]  sar_cell,       // exact floor(223 * saros fraction)
-	output reg  signed [19:0] crank_turns
+	output reg  signed [19:0] crank_turns,
+	output reg         tooth           // a tooth of the crank wheel a1 passed
 );
 
 `include "am_tables.svh"
@@ -62,6 +63,7 @@ wire cell_ge = cell_rem >= cell_trial;
 integer i;
 always @(posedge clk) begin
 	fracs_valid <= 0;
+	tooth <= 0;
 	if(compute) compute_pending <= 1;
 	if(reset || load) begin
 		for(i = 0; i < NSHAFT; i = i + 1) f[i] <= epoch_f0(epoch, i);
@@ -78,6 +80,7 @@ always @(posedge clk) begin
 			if(direction && sum >= {1'b0, modulus}) crank_turns <= crank_turns + 1'b1;
 			if(!direction && diff[40]) crank_turns <= crank_turns - 1'b1;
 		end
+		if(index == SH_TEETH && ((direction && sum >= {1'b0, modulus}) || (!direction && diff[40]))) tooth <= 1;
 		if(index == NSHAFT - 1) begin
 			stepping <= 0;
 			index <= 0;

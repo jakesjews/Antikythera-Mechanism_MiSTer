@@ -14,8 +14,10 @@ so what you see is what the bronze gears computed.
 2. Copy the `.rbf` file to `_Computer/` on your MiSTer's SD card.
 3. Launch **Antikythera** from MiSTer's Computer menu.
 
-No ROMs or SDRAM module are needed. HDMI, direct video and the analog VGA
-output all carry the same 640×480 progressive picture.
+No ROMs or SDRAM module are needed. The picture is 640×480, sent as 15 kHz
+interlaced video for TVs and direct video, or as 31 kHz progressive video
+when your `MiSTer.ini` has `forced_scandoubler=1` (or you pick it in the
+menu). HDMI works either way.
 
 ## Controls
 
@@ -35,6 +37,11 @@ output all carry the same 640×480 progressive picture.
 
 Gamepad: A and B crank, X runs and pauses, Y changes the view, the shoulder
 buttons change speed, Start opens help and Select reverses.
+
+The instrument makes a sound: a click for every tooth of the crank wheel
+that passes while it runs, a tick for each turn by hand, and a two-note
+chime when the Saros pointer reaches an eclipse (lower for a lunar eclipse,
+higher for a solar one). Turn it off in the menu if you prefer.
 
 ## Reading the dials
 
@@ -75,8 +82,9 @@ visible.
 Press **F12** to choose the 178 BC calibration proposed by Voulgaris et al.
 instead, a 354-hole lunar calendar ring, a 224-tooth b1, or to hide the
 planets and keep only the Sun, Moon and date that survive in the fragments.
-The same menu has the aspect ratio, integer scaling and MiSTer's gamma
-settings.
+The same menu has the scan rate (follow `MiSTer.ini`, 15 kHz interlaced or
+31 kHz progressive), the HDMI deinterlacer (weave or bob), the aspect ratio,
+integer scaling and sound.
 
 ## Gotchas
 
@@ -86,8 +94,9 @@ settings.
   inscribed on the fragments.
 - Turning the calendar ring with [ and ] switches it to manual; the menu's
   ring registration setting puts it back on automatic.
-- The picture is 31 kHz (480p), so a 15 kHz-only TV will not sync to the
-  analog output; VGA monitors, direct video and scalers are fine.
+- **15 kHz output is interlaced (480i).** Thin lines shimmer a little on a
+  CRT, as they do for any 480-line picture; set `forced_scandoubler=1` in
+  `MiSTer.ini` for a 31 kHz monitor, or choose 31 kHz in the menu.
 
 What the core is based on, and where it fills gaps, is in
 [docs/research.md](docs/research.md). Build and test notes are in

@@ -124,7 +124,23 @@ def main():
     log.write(json.dumps({"check": "running", "ok": advanced, "got": running}, ensure_ascii=False) + "\n")
     print(("PASS " if advanced else "FAIL ") + f"running: {running['date']!r}")
     failures += 0 if advanced else 1
-    capture(args.host, args.out, "10-final", keys="{home}")
+    # Scan rate through the OSD: the status line shows the mode in use. MiSTer's
+    # core option page changes a value with Enter (left/right do nothing there);
+    # two presses move the three-way option to "31 kHz progressive" and a third
+    # wraps it back to "MiSTer.ini".
+    def scan_text(image):
+        return read_text(image, 74 * 6, 328, 6).strip()
+    image = capture(args.host, args.out, "11-scan-default", keys="{home}{1}", settle=1.0)
+    default_scan = scan_text(image)
+    image = capture(args.host, args.out, "12-scan-31khz", keys="{f12}{down*11}{enter}{enter}{f12}", settle=2.0)
+    progressive = scan_text(image)
+    image = capture(args.host, args.out, "13-scan-restored", keys="{f12}{down*11}{enter}{f12}", settle=2.0)
+    restored = scan_text(image)
+    ok = default_scan == "15 KHZ" and progressive == "31 KHZ" and restored == "15 KHZ"
+    log.write(json.dumps({"check": "scan rate", "ok": ok, "default": default_scan, "menu 31 kHz": progressive, "restored": restored}) + "\n")
+    print(("PASS " if ok else "FAIL ") + f"scan rate: default {default_scan!r}, menu {progressive!r}, restored {restored!r}")
+    failures += 0 if ok else 1
+    capture(args.host, args.out, "14-final", keys="{home}")
     log.close()
     print(f"{failures} failure(s)")
     return 1 if failures else 0

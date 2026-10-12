@@ -15,7 +15,7 @@ import mechanism as M  # noqa: E402
 import generate_tables as G  # noqa: E402
 
 YEAR = int(M.YEAR_TICKS)
-MONTH = 1935274
+MONTH = 1935334
 DAY = 65536
 
 

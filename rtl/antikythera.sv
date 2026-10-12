@@ -15,6 +15,8 @@ module antikythera (
 	input  wire        menu_view_set,
 	input  wire        menu_run,
 	input  wire        menu_home,
+	input  wire        progressive,     // 31 kHz progressive instead of 15 kHz interlaced
+	input  wire        sound_on,
 	output wire        ce_pixel,
 	output wire [7:0]  red,
 	output wire [7:0]  green,
@@ -24,9 +26,11 @@ module antikythera (
 	output wire        de,
 	output wire        hblank,
 	output wire        vblank,
+	output wire        field,
+	output wire signed [15:0] audio,
 	output wire        running,
 	output wire signed [39:0] ticks,
-	output wire [20*23-1:0] fracs,
+	output wire [20*24-1:0] fracs,
 	output wire [19:0] lon_sun,
 	output wire [19:0] lon_moon,
 	output wire [19:0] lon_node,
@@ -54,7 +58,8 @@ wire forward, step, step_forward, load, last_forward, shafts_busy, fracs_valid, 
 wire [2:0] speed;
 wire [4:0] step_shift;
 wire signed [19:0] crank_turns;
-wire frame_start;
+wire frame_start, tooth, glyph_enter;
+wire [1:0] glyph_kind;
 wire [19:0] lon_date, lon_phase, lon_apogee, moon_anomaly;
 wire signed [15:0] phase_sin, phase_cos, moon_sin, moon_cos;
 wire [19:0] ring_offset;
@@ -126,7 +131,26 @@ am_shafts shafts (
 	.clk(clk), .reset(reset), .load(load), .epoch(menu_epoch), .b1_224(menu_b1_224),
 	.step(step), .step_forward(step_forward), .step_shift(step_shift),
 	.compute(frame_start), .busy(shafts_busy), .fracs(fracs), .fracs_valid(fracs_valid),
-	.met_cell(met_cell_exact), .sar_cell(sar_cell_exact), .crank_turns(crank_turns)
+	.met_cell(met_cell_exact), .sar_cell(sar_cell_exact), .crank_turns(crank_turns), .tooth(tooth)
+);
+
+// Clicks follow the crank wheel's teeth; at the higher speeds only every
+// few teeth sound, so the whir stays around a few hundred clicks a second.
+reg [6:0] tooth_count;
+reg [6:0] tooth_mask;
+always @* case(speed)
+	3'd4: tooth_mask = 7'd3;
+	3'd5: tooth_mask = 7'd15;
+	3'd6: tooth_mask = 7'd63;
+	3'd7: tooth_mask = 7'd127;
+	default: tooth_mask = 7'd0;
+endcase
+always @(posedge clk) if(tooth) tooth_count <= tooth_count + 1'b1;
+wire click = tooth && running && (tooth_count & tooth_mask) == 0;
+
+am_audio audio_synth (
+	.clk(clk), .reset(reset), .enable(sound_on), .tooth(click), .tick(nudge && !osd_open && !help),
+	.chime(glyph_enter), .chime_kind(glyph_kind), .sample(audio)
 );
 
 am_cosmos cosmos (
@@ -152,18 +176,19 @@ am_calendar calendar (
 	.sar_cell(sar_cell), .sar_cell_bcd(sar_cell_bcd), .sar_glyph(sar_glyph), .exel_sector(exel_sector),
 	.next_cell_bcd(next_cell_bcd), .next_months_bcd(next_months_bcd), .next_glyph(next_glyph),
 	.parapegma_index(parapegma_index), .eclipse_season(eclipse_season), .retrograde(retrograde),
-	.crank_bcd(crank_bcd), .crank_negative(crank_negative), .done(calendar_done)
+	.crank_bcd(crank_bcd), .crank_negative(crank_negative), .glyph_enter(glyph_enter), .glyph_kind(glyph_kind),
+	.done(calendar_done)
 );
 assign frame_done = calendar_done;
 
 am_video video (
-	.clk(clk), .view(view), .help(help), .fracs_in(fracs),
+	.clk(clk), .progressive(progressive), .view(view), .help(help), .eclipse_pulse(glyph_enter), .fracs_in(fracs),
 	.lon_date_in(lon_date), .lon_sun_in(lon_sun), .lon_moon_in(lon_moon), .lon_phase_in(lon_phase),
 	.lon_node_in(lon_node), .lon_mercury_in(lon_mercury), .lon_venus_in(lon_venus), .lon_mars_in(lon_mars),
 	.lon_jupiter_in(lon_jupiter), .lon_saturn_in(lon_saturn), .moon_anomaly_in(moon_anomaly),
 	.phase_sin_in(phase_sin), .phase_cos_in(phase_cos), .moon_sin_in(moon_sin), .moon_cos_in(moon_cos),
 	.ring_offset_in(ring_offset), .ring_lunar(menu_ring_lunar), .ring_auto(ring_auto),
-	.cosmos_on(!menu_cosmos_off), .epoch(menu_epoch), .b1_224(menu_b1_224),
+	.cosmos_on(!menu_cosmos_off), .epoch(menu_epoch), .b1_224(menu_b1_224), .sound_on(sound_on),
 	.running(running), .forward(forward), .speed(speed),
 	.jul_day_bcd_in(jul_day_bcd), .jul_month_in(jul_month), .jul_year_bcd_in(jul_year_bcd), .jul_bc_in(jul_bc),
 	.egy_month_in(egy_month), .egy_day_bcd_in(egy_day_bcd), .body_sign_in(body_sign), .body_deg_in(body_deg),
@@ -175,7 +200,7 @@ am_video video (
 	.parapegma_index_in(parapegma_index), .eclipse_season_in(eclipse_season), .retrograde_in(retrograde),
 	.crank_bcd_in(crank_bcd), .crank_negative_in(crank_negative),
 	.ce_pixel(ce_pixel), .red(red), .green(green), .blue(blue), .hsync(hsync), .vsync(vsync), .de(de),
-	.hblank(hblank), .vblank(vblank), .frame_start(frame_start)
+	.hblank(hblank), .vblank(vblank), .field(field), .frame_start(frame_start)
 );
 
 endmodule

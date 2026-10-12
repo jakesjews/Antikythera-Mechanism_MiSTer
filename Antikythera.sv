@@ -13,15 +13,11 @@ assign {SDRAM_DQ, SDRAM_A, SDRAM_BA, SDRAM_CLK, SDRAM_CKE, SDRAM_DQML, SDRAM_DQM
 assign {DDRAM_CLK, DDRAM_BURSTCNT, DDRAM_ADDR, DDRAM_DIN, DDRAM_BE, DDRAM_RD, DDRAM_WE} = '0;
 
 assign VGA_SL = 0;
-assign VGA_F1 = 0;
 assign VGA_SCALER = 0;
 assign VGA_DISABLE = 0;
 assign HDMI_FREEZE = 0;
 assign HDMI_BLACKOUT = 0;
-assign HDMI_BOB_DEINT = 0;
-assign AUDIO_S = 0;
-assign AUDIO_L = 0;
-assign AUDIO_R = 0;
+assign AUDIO_S = 1;
 assign AUDIO_MIX = 0;
 assign LED_DISK = 0;
 assign LED_POWER = 0;
@@ -48,6 +44,9 @@ localparam CONF_STR = {
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
 	"O[13:12],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
+	"O[15:14],Scan rate,MiSTer.ini,15 kHz interlaced,31 kHz progressive;",
+	"O[16],Deinterlace,Weave,Bob;",
+	"O[17],Sound,On,Off;",
 	"-;",
 	"-,F1 Help / Space Run;",
 	"-,Arrows Crank / Tab View;",
@@ -61,6 +60,7 @@ localparam CONF_STR = {
 
 wire [127:0] status;
 wire [1:0] buttons;
+wire forced_scandoubler;
 wire [10:0] ps2_key;
 wire [31:0] joystick;
 wire clk_sys, pll_locked;
@@ -78,7 +78,7 @@ assign sd_buff_din[0] = 0;
 
 hps_io #(.CONF_STR(CONF_STR)) hps_io (
 	.clk_sys(clk_sys), .HPS_BUS(HPS_BUS), .EXT_BUS(ext_bus), .gamma_bus(gamma_bus),
-	.buttons(buttons), .status(status), .status_menumask(16'd0),
+	.buttons(buttons), .status(status), .status_menumask(16'd0), .forced_scandoubler(forced_scandoubler),
 	.status_in(128'd0), .status_set(1'b0), .info_req(1'b0), .info(8'd0),
 	.new_vmode(1'b0), .video_rotated(1'b0),
 	.sd_lba(sd_lba), .sd_blk_cnt(sd_blk_cnt), .sd_buff_din(sd_buff_din), .sd_rd(1'b0), .sd_wr(1'b0),
@@ -100,11 +100,18 @@ end
 
 assign CLK_VIDEO = clk_sys;
 
-// The core draws 640x480 at 31 kHz, so it needs no scandoubler: the same
-// raster goes to the scaler, to direct video and to the analog output. The
-// framework's mixer adds gamma and HDMI freeze; video_freak adds the aspect
-// ratio and integer scaling options.
-wire core_ce, core_hs_n, core_vs_n, core_hb, core_vb, core_de;
+// The core draws its 640x480 picture as 15 kHz interlaced fields by default
+// and switches to a 31 kHz progressive raster itself when MiSTer.ini asks
+// for a scandoubler (forced_scandoubler=1) or the menu does, so the mixer's
+// scandoubler stays off. The mixer adds gamma and HDMI freeze; video_freak
+// adds the aspect ratio and integer scaling options.
+wire progressive = status[15:14] == 2'd0 ? forced_scandoubler : status[15:14] == 2'd2;
+assign HDMI_BOB_DEINT = status[16];
+wire core_ce, core_hs_n, core_vs_n, core_hb, core_vb, core_de, core_field;
+wire signed [15:0] core_audio;
+assign VGA_F1 = core_field;
+assign AUDIO_L = core_audio;
+assign AUDIO_R = core_audio;
 wire [7:0] core_r, core_g, core_b;
 wire mixer_de;
 wire [1:0] ar = status[122:121];
@@ -134,8 +141,9 @@ antikythera core (
 	.menu_epoch(status[2]), .menu_b1_224(status[6]), .menu_ring_lunar(status[3]),
 	.menu_ring_manual(status[4]), .menu_cosmos_off(status[5]),
 	.menu_view(status[8:7]), .menu_view_set(status[9]), .menu_run(status[10]), .menu_home(status[11]),
+	.progressive(progressive), .sound_on(!status[17]),
 	.ce_pixel(core_ce), .red(core_r), .green(core_g), .blue(core_b),
-	.hsync(core_hs_n), .vsync(core_vs_n), .de(core_de), .hblank(core_hb), .vblank(core_vb),
+	.hsync(core_hs_n), .vsync(core_vs_n), .de(core_de), .hblank(core_hb), .vblank(core_vb), .field(core_field), .audio(core_audio),
 	.running(LED_USER), .ticks(), .fracs(), .lon_sun(), .lon_moon(), .lon_node(), .lon_mercury(), .lon_venus(),
 	.lon_mars(), .lon_jupiter(), .lon_saturn(), .met_cell(), .sar_cell(),
 	.debug_ring_offset(), .debug_ring_auto(), .debug_ring_index(), .frame_done()

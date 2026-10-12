@@ -14,7 +14,7 @@ module am_calendar (
 	input  wire        ring_lunar,
 	input  wire        ring_auto,
 	input  wire [19:0] ring_manual,
-	input  wire [20*23-1:0] fracs,
+	input  wire [20*24-1:0] fracs,
 	input  wire [19:0] lon_sun, lon_moon, lon_phase, lon_node,
 	input  wire [19:0] lon_mercury, lon_venus, lon_mars, lon_jupiter, lon_saturn,
 	input  wire signed [19:0] crank_turns,
@@ -51,6 +51,8 @@ module am_calendar (
 	output reg  [4:0]  retrograde,
 	output reg  [19:0] crank_bcd,
 	output reg         crank_negative,
+	output reg         glyph_enter,     // pointer moved into a cell with an eclipse glyph
+	output reg  [1:0]  glyph_kind,      // {lunar, solar}
 	output reg         done
 );
 
@@ -152,6 +154,8 @@ wire [19:0] wrap_b = lon_sun - lon_node + 20'h80000;
 wire [19:0] dist_a = wrap_a[19] ? -wrap_a : wrap_a;
 wire [19:0] dist_b = wrap_b[19] ? -wrap_b : wrap_b;
 reg [19:0] planet_lon;
+reg [7:0] prev_sar_cell;
+reg armed;
 always @* begin
 	case(body)
 		0: lon_sel = frac_of(SH_SUN_MEAN);
@@ -178,14 +182,17 @@ wire [9:0] met_info_now = metonic_info(met_cell);
 wire [19:0] frac_callippic = frac_of(SH_CALLIPPIC);
 wire [19:0] frac_games = frac_of(SH_GAMES);
 wire [12:0] scan_glyph = saros_glyph(next_cell);
+wire [12:0] glyph_now = saros_glyph(sar_cell);
 
 integer p;
 always @(posedge clk) begin
 	div_start <= 0;
 	done <= 0;
+	glyph_enter <= 0;
 	if(reset || clear) begin
 		state <= 0;
 		retrograde <= 0;
+		armed <= 0;
 		for(p = 0; p < 5; p = p + 1) prev_lon[p] <= 0;
 	end else case(state)
 		0: if(start) state <= 1;
@@ -355,7 +362,13 @@ always @(posedge clk) begin
 		end
 		27: begin
 			sar_cell_bcd <= bcd_out[11:0];
-			sar_glyph <= saros_glyph(sar_cell);
+			sar_glyph <= glyph_now;
+			if(armed && sar_cell != prev_sar_cell && glyph_now != 0) begin
+				glyph_enter <= 1;
+				glyph_kind <= {glyph_now[11], glyph_now[5]};
+			end
+			prev_sar_cell <= sar_cell;
+			armed <= 1;
 			exel_sector <= cell_product[21:20];
 			scan <= 1;
 			state <= 28;

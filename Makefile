@@ -2,7 +2,7 @@ PYTHON ?= python3
 VERILATOR ?= verilator
 
 RTL := rtl/am_font.sv rtl/am_strings.sv rtl/am_cordic.sv rtl/am_polar.sv rtl/am_shafts.sv \
-       rtl/am_timebase.sv rtl/am_cosmos.sv rtl/am_calendar.sv rtl/am_controls.sv rtl/am_video.sv \
+       rtl/am_timebase.sv rtl/am_cosmos.sv rtl/am_calendar.sv rtl/am_controls.sv rtl/am_audio.sv rtl/am_video.sv \
        rtl/antikythera.sv
 GENERATED := rtl/am_tables.svh rtl/am_strings.sv rtl/am_font.sv
 # FPGA power-up values and explicitly unused output ports are intentional.
@@ -53,7 +53,7 @@ test-mister: screenshots
 		--top-module tb_emu --Mdir build/mister -o tb_emu \
 		$(RTL) sim/am_pll.sv Antikythera.sv $(FRAMEWORK_VIDEO) sim/tb_emu.sv > build/mister-build.log 2>&1
 	build/mister/tb_emu
-	uv run --quiet sim/compare_frames.py build/mister/frame.ppm build/screenshots/01-front.png
+	uv run --quiet sim/compare_frames.py build/mister/frame.ppm build/screenshots/12-interlaced.png
 
 sim: build/sim-sdl/am_sim
 	build/sim-sdl/am_sim --interactive

@@ -8,7 +8,7 @@ module am_cosmos (
 	input  wire        clk,
 	input  wire        reset,
 	input  wire        start,
-	input  wire [20*23-1:0] fracs,
+	input  wire [20*24-1:0] fracs,
 	output reg  [19:0] lon_date,
 	output reg  [19:0] lon_sun,
 	output reg  [19:0] lon_moon,

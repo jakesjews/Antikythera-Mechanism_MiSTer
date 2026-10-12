@@ -88,6 +88,7 @@ public:
     int h = 0, v = 0;
     bool last_vsync = true, last_hsync = true;
     bool await_first_line = true;
+    int cur_field = 0;
     std::vector<uint8_t> frame = std::vector<uint8_t>(640 * 480 * 3, 0);
     bool frame_complete = false;
     int pixels_in_frame = 0;
@@ -96,6 +97,7 @@ public:
         top.clk = 0; top.reset = 1; top.osd_open = 0; top.ps2_key = 0; top.joystick = 0;
         top.menu_epoch = 0; top.menu_b1_224 = 0; top.menu_ring_lunar = 0; top.menu_ring_manual = 0;
         top.menu_cosmos_off = 0; top.menu_view = 0; top.menu_view_set = 0; top.menu_run = 0; top.menu_home = 0;
+        top.progressive = 1; top.sound_on = 1;
         reset();
     }
     ~Simulation() { top.final(); }
@@ -121,10 +123,11 @@ public:
         }
         last_vsync = vs; last_hsync = hs;
         if (top.de) {
-            if (await_first_line) { await_first_line = false; v = 0; h = -1; }
+            if (await_first_line) { await_first_line = false; v = 0; h = -1; cur_field = top.field; }
             ++h;
-            if (h >= 0 && h < 640 && v >= 0 && v < 480) {
-                size_t i = (v * 640 + h) * 3;
+            int row = top.progressive ? v : 2 * v + cur_field;
+            if (h >= 0 && h < 640 && row >= 0 && row < 480) {
+                size_t i = (row * 640 + h) * 3;
                 frame[i] = top.red; frame[i + 1] = top.green; frame[i + 2] = top.blue;
                 ++pixels_in_frame;
             }
@@ -179,7 +182,7 @@ static std::vector<Expect> load_vectors(const std::string& path) {
         std::istringstream s(line);
         Expect e;
         s >> e.ticks >> e.epoch;
-        e.fracs.resize(23);
+        e.fracs.resize(24);
         for (auto& x : e.fracs) s >> x;
         e.bodies.resize(8);
         for (auto& x : e.bodies) s >> x;
@@ -197,9 +200,10 @@ static double angle_error(double a, double b) {
 static int run_tests(const std::string& vectors_path) {
     Simulation sim;
     auto vectors = load_vectors(vectors_path);
-    const int64_t YEAR = 23937024, MONTH = 1935274, DAY = 65536;
+    const int64_t YEAR = 23937024, MONTH = 1935334, DAY = 65536;
     int checked = 0;
     for (const auto& e : vectors) {
+        std::cerr << "vector ticks=" << e.ticks << " epoch=" << e.epoch << " at clock " << sim.clocks << "\n";
         sim.top.menu_epoch = e.epoch;
         sim.top.menu_home = 1; sim.tick(4); sim.top.menu_home = 0; sim.tick(64);
         bool fwd = e.ticks >= 0;
@@ -214,7 +218,7 @@ static int run_tests(const std::string& vectors_path) {
         sim.until([&] { return sim.ticks() == e.ticks; }, 4000000);
         sim.frames(3);
         require(sim.ticks() == e.ticks, "tick count drifted after the steps");
-        for (int s = 0; s < 23; ++s) {
+        for (int s = 0; s < 24; ++s) {
             double err = angle_error(sim.frac(s), e.fracs[s]);
             if (err > 3e-6) {
                 std::cerr << "shaft " << s << " at ticks " << e.ticks << " epoch " << e.epoch
@@ -248,7 +252,43 @@ static int run_tests(const std::string& vectors_path) {
     require(sim.top.debug_ring_auto == 0 && sim.top.debug_ring_index == index0 - 1, "ring turn forward did not move one day");
     sim.key(0x54); sim.key(0x54); sim.frames(3);
     require(sim.top.debug_ring_index == index0 + 1, "ring turn back did not move one day");
-    std::cout << "PASS " << checked << " vectors: all 23 shafts, the Sun, Moon, node and five planets, Metonic and Saros cells match the model; ring turns by hand\n";
+    // The interlaced raster assembles into the same picture as the progressive one.
+    std::cerr << "interlace check at clock " << sim.clocks << "\n";
+    std::vector<uint8_t> progressive_frame = sim.frame;
+    sim.top.progressive = 0;
+    sim.frames(6);
+    size_t differing = 0;
+    for (size_t i = 0; i < progressive_frame.size(); i += 3) {
+        int px = (i / 3) % 640, py = (i / 3) / 640;
+        if (px >= 444 && px < 480 && py >= 328 && py < 336) continue;   // the "15 KHZ" / "31 KHZ" readout
+        if (progressive_frame[i] != sim.frame[i] || progressive_frame[i+1] != sim.frame[i+1] || progressive_frame[i+2] != sim.frame[i+2]) {
+            if (differing < 12) std::cerr << "  differs at x=" << (i / 3) % 640 << " y=" << (i / 3) / 640 << "\n";
+            ++differing;
+        }
+    }
+    if (differing) {
+        write_png("build/mismatch-progressive.png", progressive_frame, 640, 480);
+        write_png("build/mismatch-interlaced.png", sim.frame, 640, 480);
+    }
+    require(differing == 0, "interlaced fields differ from the progressive frame in " + std::to_string(differing) + " pixels");
+    sim.top.progressive = 1;
+    // A turn by hand clicks, and the crank wheel's teeth click while running.
+    bool heard = false;
+    sim.key(0x174);
+    for (int i = 0; i < 20000 && !heard; ++i) { sim.tick(); heard = sim.top.audio != 0; }
+    require(heard, "no click after a turn by hand");
+    // Six of the Mechanism's months after the 178 BC epoch the Saros pointer enters glyph cell 8: a chime.
+    sim.top.menu_epoch = 1;
+    sim.top.menu_home = 1; sim.tick(4); sim.top.menu_home = 0; sim.frames(3);
+    for (int i = 0; i < 6; ++i) sim.key(0x175);
+    sim.until([&] { return sim.ticks() == 6LL * 1935334; }, 4000000);
+    sim.frames(2);
+    require(sim.top.sar_cell == 7, "Saros pointer should be in cell 8 after six months, is in " + std::to_string(sim.top.sar_cell + 1));
+    heard = false;
+    for (int i = 0; i < 400000 && !heard; ++i) { sim.tick(); heard = sim.top.audio > 2000 || sim.top.audio < -2000; }
+    require(heard, "no chime on entering an eclipse glyph cell");
+    std::cout << "PASS " << checked << " vectors: all 24 shafts, the Sun, Moon, node and five planets, Metonic and Saros cells match the model; "
+                 "ring turns by hand; interlaced fields match the progressive frame; clicks and the eclipse chime play\n";
     return 0;
 }
 
@@ -256,13 +296,15 @@ static int screenshots(const std::string& dir) {
     Simulation sim;
     sim.frames(3);
     sim.save(dir + "/01-front.png");
+    sim.top.progressive = 0; sim.frames(6); sim.save(dir + "/12-interlaced.png");
+    sim.top.progressive = 1; sim.frames(3);
     sim.key(0x1e); sim.frames(3); sim.save(dir + "/02-back.png");
     sim.key(0x26); sim.frames(3); sim.save(dir + "/03-gears.png");
     sim.key(0x16); sim.key(0x05); sim.frames(3); sim.save(dir + "/04-help.png");
     sim.key(0x05);
     // Four years forward, a lunar month at a time, to show the pointers moving.
     for (int i = 0; i < 50; ++i) sim.key(0x175);
-    sim.until([&] { return sim.ticks() >= 50LL * 1935274; }, 4000000);
+    sim.until([&] { return sim.ticks() >= 50LL * 1935334; }, 4000000);
     sim.frames(3); sim.save(dir + "/05-front-four-years.png");
     sim.key(0x1e); sim.frames(3); sim.save(dir + "/06-back-four-years.png");
     sim.top.menu_epoch = 1; sim.top.menu_home = 1; sim.tick(4); sim.top.menu_home = 0;
@@ -276,6 +318,10 @@ static int screenshots(const std::string& dir) {
     sim.key(0x29);
     sim.until([&] { return sim.ticks() > 100LL * 23937024; }, 160000000);
     sim.key(0x29); sim.frames(3); sim.save(dir + "/11-a-century-later.png");
+    sim.top.menu_home = 1; sim.tick(4); sim.top.menu_home = 0;
+    // Six lunar months after the 178 BC epoch the Saros pointer reaches a glyph cell.
+    for (int i = 0; i < 6; ++i) sim.key(0x175);
+    sim.frames(3); sim.key(0x1e); sim.frames(3); sim.save(dir + "/13-eclipse.png");
     std::cout << "screenshots written to " << dir << "\n";
     return 0;
 }
@@ -321,9 +367,31 @@ static int interactive() {
 }
 #endif
 
+static int probe(bool progressive) {
+    Simulation sim;
+    sim.top.progressive = progressive;
+    int vs_edges = 0, de_pixels = 0, field_changes = 0, ce_count = 0, hs_edges = 0;
+    bool last_vs = true, last_hs = true, last_field = false;
+    for (int i = 0; i < 3000000; ++i) {
+        sim.top.clk = 0; sim.top.eval(); sim.top.clk = 1; sim.top.eval();
+        if (sim.top.ce_pixel) {
+            ++ce_count;
+            if (sim.top.de) ++de_pixels;
+            if (!sim.top.vsync && last_vs) ++vs_edges;
+            if (!sim.top.hsync && last_hs) ++hs_edges;
+            last_vs = sim.top.vsync; last_hs = sim.top.hsync;
+            if (sim.top.field != last_field) { ++field_changes; last_field = sim.top.field; }
+        }
+    }
+    std::cout << "progressive=" << progressive << " ce=" << ce_count << " hsync edges=" << hs_edges << " vsync edges=" << vs_edges
+              << " de pixels=" << de_pixels << " field changes=" << field_changes << "\n";
+    return 0;
+}
+
 int main(int argc, char** argv) {
     Verilated::commandArgs(argc, argv);
     try {
+        if (argc >= 2 && std::strcmp(argv[1], "--probe") == 0) { probe(true); return probe(false); }
         if (argc >= 3 && std::strcmp(argv[1], "--test") == 0) return run_tests(argv[2]);
         if (argc >= 3 && std::strcmp(argv[1], "--screenshots") == 0) return screenshots(argv[2]);
 #ifdef USE_SDL

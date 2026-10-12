@@ -4,8 +4,10 @@ derive_pll_clocks
 derive_clock_uncertainty
 
 # Every register of the renderer is enabled by the pixel clock enable, so the
-# logic between them has two 50 MHz cycles. The enable itself stays single-cycle.
+# logic between them has two 50 MHz cycles. The enable divider itself stays
+# single-cycle; the scan-mode register only changes on an enabled edge, so its
+# data paths keep the two-cycle budget.
 set_multicycle_path -setup -end 2 -from [get_registers {*|am_video:*|*}] -to [get_registers {*|am_video:*|*}]
 set_multicycle_path -hold -end 1 -from [get_registers {*|am_video:*|*}] -to [get_registers {*|am_video:*|*}]
-set_multicycle_path -setup -end 1 -from [get_registers {*|am_video:*|divider}]
-set_multicycle_path -hold -end 0 -from [get_registers {*|am_video:*|divider}]
+set_multicycle_path -setup -end 1 -from [get_registers {*|am_video:*|cdiv[*]}]
+set_multicycle_path -hold -end 0 -from [get_registers {*|am_video:*|cdiv[*]}]
