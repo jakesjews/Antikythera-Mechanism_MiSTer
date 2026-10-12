@@ -56,9 +56,11 @@ module am_video (
 	output reg  [7:0]  red = 0,
 	output reg  [7:0]  green = 0,
 	output reg  [7:0]  blue = 0,
-	output reg         hsync = 1,
+	output reg         hsync = 1,      // negative pulses (VGA polarity)
 	output reg         vsync = 1,
 	output reg         de = 0,
+	output reg         hblank = 1,     // positive, for the framework's video_mixer
+	output reg         vblank = 1,
 	output wire        frame_start
 );
 
@@ -218,6 +220,8 @@ reg [9:0] vq [0:QDEPTH];
 reg hsq [0:QDEPTH];
 reg vsq [0:QDEPTH];
 reg visq [0:QDEPTH];
+reg hbq [0:QDEPTH];
+reg vbq [0:QDEPTH];
 reg [2:0] regq [0:QDEPTH];
 reg [5:0] gearq [0:QDEPTH];
 wire [9:0] radius;
@@ -891,6 +895,8 @@ always @(posedge clk) begin
 		hsq[0] <= !(h >= 656 && h < 752);
 		vsq[0] <= !(v >= 490 && v < 492);
 		visq[0] <= h < 640 && v < 480;
+		hbq[0] <= h >= 640;
+		vbq[0] <= v >= 480;
 		regq[0] <= region0;
 		gearq[0] <= gear0;
 		// Stage 1 -> polar input.
@@ -899,6 +905,7 @@ always @(posedge clk) begin
 		for(k = 1; k <= QDEPTH; k = k + 1) begin
 			hq[k] <= hq[k-1]; vq[k] <= vq[k-1];
 			hsq[k] <= hsq[k-1]; vsq[k] <= vsq[k-1]; visq[k] <= visq[k-1];
+			hbq[k] <= hbq[k-1]; vbq[k] <= vbq[k-1];
 			regq[k] <= regq[k-1]; gearq[k] <= gearq[k-1];
 		end
 		// Drawing stage -> ROM stage.
@@ -914,6 +921,8 @@ always @(posedge clk) begin
 		hsync <= hsq[LAT+2];
 		vsync <= vsq[LAT+2];
 		de <= visq[LAT+2];
+		hblank <= hbq[LAT+2];
+		vblank <= vbq[LAT+2];
 		{red, green, blue} <= visq[LAT+2] ? ((hit_d2 && font_pixel) ? fg_d2 : bg_d2) : 24'd0;
 	end
 end

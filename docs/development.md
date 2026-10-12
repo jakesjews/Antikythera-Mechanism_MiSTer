@@ -27,7 +27,14 @@ make sim           # interactive window with the core's keys
 attested Metonic cells, the eclipse model against the surviving glyphs), then
 drives the RTL through both epochs with year, month and day steps forward and
 backward and compares all 23 shaft angles, the Sun, Moon, node and five
-planets, and the exact Metonic and Saros cell numbers.
+planets, and the exact Metonic and Saros cell numbers. It ends with
+`make test-mister`, which builds the MiSTer wrapper with the unmodified
+`hps_io`, `video_freezer`, `gamma_corr`, `scandoubler` and `video_freak`,
+checks the 640×480 raster and 4:3 aspect the framework receives, and compares
+the wrapper's frame pixel for pixel with the standalone core. The one
+exception is `sim/video_mixer_sim.sv`, a copy of the framework mixer with
+three wire declarations moved out of an unnamed generate block that Verilator
+scopes differently from Quartus; the Quartus build uses the framework file.
 
 ## Quartus
 

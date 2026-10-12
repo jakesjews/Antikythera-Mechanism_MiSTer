@@ -22,6 +22,8 @@ module antikythera (
 	output wire        hsync,
 	output wire        vsync,
 	output wire        de,
+	output wire        hblank,
+	output wire        vblank,
 	output wire        running,
 	output wire signed [39:0] ticks,
 	output wire [20*23-1:0] fracs,
@@ -173,7 +175,7 @@ am_video video (
 	.parapegma_index_in(parapegma_index), .eclipse_season_in(eclipse_season), .retrograde_in(retrograde),
 	.crank_bcd_in(crank_bcd), .crank_negative_in(crank_negative),
 	.ce_pixel(ce_pixel), .red(red), .green(green), .blue(blue), .hsync(hsync), .vsync(vsync), .de(de),
-	.frame_start(frame_start)
+	.hblank(hblank), .vblank(vblank), .frame_start(frame_start)
 );
 
 endmodule

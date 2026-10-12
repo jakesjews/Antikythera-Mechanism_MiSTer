@@ -14,7 +14,8 @@ so what you see is what the bronze gears computed.
 2. Copy the `.rbf` file to `_Computer/` on your MiSTer's SD card.
 3. Launch **Antikythera** from MiSTer's Computer menu.
 
-No ROMs or SDRAM module are needed. Normal HDMI and direct video both work.
+No ROMs or SDRAM module are needed. HDMI, direct video and the analog VGA
+output all carry the same 640×480 progressive picture.
 
 ## Controls
 
@@ -74,6 +75,8 @@ visible.
 Press **F12** to choose the 178 BC calibration proposed by Voulgaris et al.
 instead, a 354-hole lunar calendar ring, a 224-tooth b1, or to hide the
 planets and keep only the Sun, Moon and date that survive in the fragments.
+The same menu has the aspect ratio, integer scaling and MiSTer's gamma
+settings.
 
 ## Gotchas
 
@@ -83,6 +86,8 @@ planets and keep only the Sun, Moon and date that survive in the fragments.
   inscribed on the fragments.
 - Turning the calendar ring with [ and ] switches it to manual; the menu's
   ring registration setting puts it back on automatic.
+- The picture is 31 kHz (480p), so a 15 kHz-only TV will not sync to the
+  analog output; VGA monitors, direct video and scalers are fine.
 
 What the core is based on, and where it fills gaps, is in
 [docs/research.md](docs/research.md). Build and test notes are in

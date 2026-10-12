@@ -47,6 +47,7 @@ localparam CONF_STR = {
 	"T[11],Return to the epoch;",
 	"-;",
 	"O[122:121],Aspect ratio,Original,Full Screen,[ARC1],[ARC2];",
+	"O[13:12],Scale,Normal,V-Integer,Narrower HV-Integer,Wider HV-Integer;",
 	"-;",
 	"-,F1 Help / Space Run;",
 	"-,Arrows Crank / Tab View;",
@@ -68,7 +69,6 @@ wire [35:0] ext_bus;
 wire [21:0] gamma_bus;
 assign ext_bus[32] = 1'b0;
 assign ext_bus[15:0] = 16'd0;
-assign gamma_bus[21] = 1'b0;
 wire [31:0] sd_lba [0:0];
 wire [5:0] sd_blk_cnt [0:0];
 wire [7:0] sd_buff_din [0:0];
@@ -98,10 +98,35 @@ always @(posedge clk_sys or posedge reset_request) begin
 	else reset_sync <= {reset_sync[0],1'b0};
 end
 
-wire [1:0] ar = status[122:121];
-assign VIDEO_ARX = (ar == 0) ? 13'd4 : {11'd0, ar} - 13'd1;
-assign VIDEO_ARY = (ar == 0) ? 13'd3 : 13'd0;
 assign CLK_VIDEO = clk_sys;
+
+// The core draws 640x480 at 31 kHz, so it needs no scandoubler: the same
+// raster goes to the scaler, to direct video and to the analog output. The
+// framework's mixer adds gamma and HDMI freeze; video_freak adds the aspect
+// ratio and integer scaling options.
+wire core_ce, core_hs_n, core_vs_n, core_hb, core_vb, core_de;
+wire [7:0] core_r, core_g, core_b;
+wire mixer_de;
+wire [1:0] ar = status[122:121];
+
+video_mixer #(.LINE_LENGTH(640), .HALF_DEPTH(0), .GAMMA(1)) video_mixer (
+	.CLK_VIDEO(CLK_VIDEO), .CE_PIXEL(CE_PIXEL), .ce_pix(core_ce),
+	.scandoubler(1'b0), .hq2x(1'b0), .gamma_bus(gamma_bus),
+	.R(core_r), .G(core_g), .B(core_b),
+	.HSync(!core_hs_n), .VSync(!core_vs_n), .HBlank(core_hb), .VBlank(core_vb),
+	.HDMI_FREEZE(HDMI_FREEZE), .freeze_sync(),
+	.VGA_R(VGA_R), .VGA_G(VGA_G), .VGA_B(VGA_B), .VGA_VS(VGA_VS), .VGA_HS(VGA_HS), .VGA_DE(mixer_de)
+);
+
+video_freak video_freak (
+	.CLK_VIDEO(CLK_VIDEO), .CE_PIXEL(CE_PIXEL), .VGA_VS(VGA_VS),
+	.HDMI_WIDTH(HDMI_WIDTH), .HDMI_HEIGHT(HDMI_HEIGHT),
+	.VGA_DE(VGA_DE), .VIDEO_ARX(VIDEO_ARX), .VIDEO_ARY(VIDEO_ARY),
+	.VGA_DE_IN(mixer_de),
+	.ARX((ar == 0) ? 12'd4 : {10'd0, ar - 2'd1}),
+	.ARY((ar == 0) ? 12'd3 : 12'd0),
+	.CROP_SIZE(12'd0), .CROP_OFF(5'd0), .SCALE({1'b0, status[13:12]})
+);
 
 antikythera core (
 	.clk(clk_sys), .reset(reset_sync[1]), .osd_open(OSD_STATUS),
@@ -109,8 +134,8 @@ antikythera core (
 	.menu_epoch(status[2]), .menu_b1_224(status[6]), .menu_ring_lunar(status[3]),
 	.menu_ring_manual(status[4]), .menu_cosmos_off(status[5]),
 	.menu_view(status[8:7]), .menu_view_set(status[9]), .menu_run(status[10]), .menu_home(status[11]),
-	.ce_pixel(CE_PIXEL), .red(VGA_R), .green(VGA_G), .blue(VGA_B),
-	.hsync(VGA_HS), .vsync(VGA_VS), .de(VGA_DE),
+	.ce_pixel(core_ce), .red(core_r), .green(core_g), .blue(core_b),
+	.hsync(core_hs_n), .vsync(core_vs_n), .de(core_de), .hblank(core_hb), .vblank(core_vb),
 	.running(LED_USER), .ticks(), .fracs(), .lon_sun(), .lon_moon(), .lon_node(), .lon_mercury(), .lon_venus(),
 	.lon_mars(), .lon_jupiter(), .lon_saturn(), .met_cell(), .sar_cell(),
 	.debug_ring_offset(), .debug_ring_auto(), .debug_ring_index(), .frame_done()

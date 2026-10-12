@@ -9,7 +9,7 @@ GENERATED := rtl/am_tables.svh rtl/am_strings.sv rtl/am_font.sv
 # Comparisons against integer geometry constants expand widths harmlessly.
 VFLAGS := -Wall -Wno-PROCASSINIT -Wno-PINCONNECTEMPTY -Wno-UNUSEDSIGNAL -Wno-UNUSEDPARAM -Wno-WIDTHEXPAND -Irtl
 
-.PHONY: all tables lint test sim screenshots framework-check clean
+.PHONY: all tables lint test test-mister sim screenshots framework-check clean
 
 all: test
 
@@ -39,6 +39,21 @@ build/sim-sdl/am_sim: $(RTL) $(GENERATED) sim/main.cpp
 test: lint build/vectors.txt build/sim/am_sim
 	$(PYTHON) tools/mechanism.py > build/model.log
 	build/sim/am_sim --test build/vectors.txt
+	$(MAKE) test-mister
+
+# The unmodified framework's hps_io, video_mixer and video_freak around the
+# wrapper. Framework compatibility warnings stay in build/mister-build.log.
+# video_mixer_sim.sv is the framework mixer with three declarations hoisted out of an
+# unnamed generate block that Verilator scopes differently from Quartus.
+FRAMEWORK_VIDEO := sys/hps_io.sv sim/video_mixer_sim.sv sys/video_freezer.sv sys/gamma_corr.sv \
+                   sys/scandoubler.v sys/hq2x.sv sys/math.sv sys/video_freak.sv
+test-mister: screenshots
+	@mkdir -p build/mister
+	$(VERILATOR) --binary --timing -j 4 -Wno-fatal -Wno-PINMISSING -Wno-PROCASSWIRE -Irtl -Isim -I. \
+		--top-module tb_emu --Mdir build/mister -o tb_emu \
+		$(RTL) sim/am_pll.sv Antikythera.sv $(FRAMEWORK_VIDEO) sim/tb_emu.sv > build/mister-build.log 2>&1
+	build/mister/tb_emu
+	uv run --quiet sim/compare_frames.py build/mister/frame.ppm build/screenshots/01-front.png
 
 sim: build/sim-sdl/am_sim
 	build/sim-sdl/am_sim --interactive
@@ -52,4 +67,4 @@ framework-check:
 	@echo "MiSTer sys/ matches the initial template commit."
 
 clean:
-	rm -rf build/sim build/sim-sdl build/vectors.txt build/screenshots build/model.log
+	rm -rf build/sim build/sim-sdl build/mister build/vectors.txt build/screenshots build/model.log build/mister-build.log

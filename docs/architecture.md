@@ -44,6 +44,14 @@ logic two 50 MHz cycles; `Antikythera.sdc` declares that multicycle path.
 Text comes from a generated ROM (`am_strings`) and a 5×7 font with the Greek
 letters the dials need (`am_font`).
 
+The wrapper feeds the core's RGB, blanking and sync pulses through the
+framework's `video_mixer` (gamma correction and HDMI freeze) and
+`video_freak` (aspect ratio and integer scaling). The picture is already
+640×480 at 31 kHz, so the scandoubler stays off and the same raster goes to
+the HDMI scaler, direct video and the analog output; the 2:1 clock to pixel
+ratio is enough for that path. The framework's `forced_scandoubler` request
+is therefore ignored, as it is by the companion Difference Engine core.
+
 ## Modules
 
 | Module | Responsibility |
